@@ -1,0 +1,405 @@
+\documentclass{article}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{amsmath}
+\usepackage{xcolor}
+
+\geometry{a4paper, margin=1in}
+
+\title{\textbf{Milestone 1 Report: Smart Contract Analysis for Cardano DEX Analytics Tool}}
+\author{MuesliSwap Team}
+\date{\today}
+
+\setcounter{tocdepth}{2}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document, corresponding to Milestone 1 of our Cardano Catalyst project, provides an in-depth analysis of the smart contract architectures used by several major Cardano DEX protocols. By examining their datums, transaction flows, and off-chain batcher implementations, we establish the foundational knowledge needed to build an open-source analytics tool that tracks, parses, and interprets DEX activity. The ultimate goal is to foster transparency and encourage innovation in the Cardano DeFi ecosystem, aligning with Catalyst’s mission of driving Cardano’s growth and adoption.
+\end{abstract}
+
+\vfill
+\tableofcontents
+\newpage
+
+\section{Introduction}
+\label{sec:intro}
+The objective of our project is to develop a fully open-source decentralized exchange (DEX) analytics tool that supports all major Cardano DEX protocols. By providing users and developers with detailed data insights (e.g., trades, prices, volume, and other metrics), this tool aims to increase transparency and foster innovation in the Cardano DeFi ecosystem.
+
+\subsection{Context and Problem Statement}
+Current analytics solutions for Cardano DEXs are fragmented or proprietary. While many DEXs publish some data, there is no standardized tool that aggregates and analyzes this information from multiple platforms in one place. As a result:
+\begin{itemize}
+    \item Users lack a comprehensive dashboard to view and compare different DEX markets.
+    \item Developers find it challenging to understand the underlying smart contract datums and transaction patterns on each DEX, hindering innovation.
+    \item Researchers lack robust tools for generating aggregated market insights.
+\end{itemize}
+Our project addresses these issues by providing a single open-source software package to analyze Cardano DEX data.
+
+\subsection{Scope of Milestone 1}
+This document corresponds to \textbf{Milestone 1: Smart Contract Analysis}. The primary goal of this milestone is to produce a comprehensive analysis of the smart contracts used by major Cardano DEX protocols. Specifically, we examine:
+\begin{itemize}
+    \item The high-level mechanics of each DEX protocol.
+    \item The datums (UTxO-level data structures) and transaction flows for typical actions (e.g., swaps, adding/removing liquidity).
+    \item Details on batcher or aggregator implementations, if applicable.
+    \item Notable protocol-specific nuances.
+\end{itemize}
+
+In later milestones, we will use this analysis to develop and refine our open-source analytics tool, ensuring it can track, parse, and interpret DEX data accurately.
+
+\section{Approach and Methodology}
+\label{sec:approach}
+Our approach to analyzing the smart contracts and on-chain transactions for each DEX consists of the following steps:
+
+\begin{enumerate}
+    \item \textbf{Protocol Review:} Understand the general design of each DEX, including Automated Market Maker (AMM) vs. Orderbook models, stable swaps, or hybrid approaches.
+    \item \textbf{On-Chain Data Gathering:} Collect real transaction samples from each DEX (e.g., from cardanoscan.io, cexplorer.io, or direct chain queries) to identify the structure of relevant UTxOs.
+    \item \textbf{Datum Inspection:} Examine the datum fields for liquidity pools, orders, or swaps, noting how each protocol encodes these data.
+    \item \textbf{Batcher Analysis (if present):} Investigate batcher scripts or aggregator transactions, identifying how they are triggered and how they update state.
+    \item \textbf{Documentation of Special Cases:} Identify any exceptions or special mechanics unique to each DEX, such as partial fills, multi-asset pools, or lock-release mechanics.
+\end{enumerate}
+
+The sections below provide placeholders for our initial findings, which will be expanded upon with in-depth details in collaboration with the DEX teams and additional research.
+
+\section{DEX-by-DEX Smart Contract Analysis}
+\label{sec:dex_analysis}
+In this section, we present an overview of the major Cardano DEX protocols. For each protocol, we summarize how the smart contracts work, how transactions and datums are structured, and what particular features stand out. These analyses will form the basis for building the relevant modules within our open-source analytics tool.
+
+
+\subsection{MuesliSwap Hybrid-DEX}
+\label{sec:muesli_hybrid}
+
+\subsubsection{Protocol Overview}
+MuesliSwap operates a \emph{hybrid DEX} integrating both an orderbook system (currently in v2) and a liquidity-pool-based AMM. The orderbook architecture handles trading orders, which can be matched either directly with other users’ orders or against available liquidity pools. This approach seeks to capture benefits of both the constant-product AMM model and a limit-order model, allowing for flexible combinations of liquidity provisioning and order-driven trading.
+
+\paragraph{Design Considerations}
+\begin{itemize}
+    \item Users place trading orders into the v2 orderbook. These orders can be partially or fully matched by off-chain matchmakers.
+    \item AMM-style liquidity can be provided via a specific contract that uses an order-batcher solution for deposits and withdrawals. 
+    \item Matching transactions can pair user orders with either other user orders or the liquidity pool’s reserves (constant product, concentrated liquidity, or other variations).
+\end{itemize}
+
+\paragraph{Datum Structures}
+Two main data types are relevant: one for the liquidity pool (\texttt{PoolDatum}), and one for the orders (\texttt{OrderDatum}).
+
+\begin{verbatim}
+data PoolDatum = PoolDatum
+  { pdCoinA :: AssetClass
+  , pdCoinB :: AssetClass
+  , pdTotalLiquidity :: Integer
+  , pdRootKLast :: Integer
+  , pdProfitSharing :: Maybe ProfitSharing
+  , pdSwapFee :: Integer
+  , pdExtraFeeDenom :: Integer
+  }
+\end{verbatim}
+
+\noindent
+\emph{PoolDatum} tracks which two assets form the pool, total liquidity (LP token supply), optional fields for profit sharing, and fee parameters. When liquidity is added or removed, updates to \texttt{pdTotalLiquidity} and other fields are performed.
+
+The \emph{order} side uses:
+
+\begin{verbatim}
+data OrderStep
+  = Deposit { dMinimumLP :: Integer }
+  | Withdraw { wMinimumCoinA :: Integer
+             , wMinimumCoinB :: Integer
+             }
+
+data OrderDatum = OrderDatum
+  { odSender :: Address
+  , odReceiver :: Address
+  , odReceiverDatumHash :: Maybe DatumHash
+  , odStep :: OrderStep
+  , odBatcherFee :: Integer
+  , odOutputADA :: Integer
+  , odPoolNftTokenName :: TokenName
+  , odScriptVersion :: BuiltinByteString
+  }
+\end{verbatim}
+
+\noindent
+For deposits and withdrawals, a user creates a UTxO carrying an \texttt{OrderDatum} with \texttt{odStep} set to \texttt{Deposit} or \texttt{Withdraw}. The contract logic and an off-chain batcher enforce minimum or maximum amounts received.
+
+\subsubsection{Batcher and Off-Chain Components}
+\begin{itemize}
+    \item A batcher script processes \texttt{OrderDatum} UTxOs for pool-based actions (deposit or withdraw). After validating parameters, it updates \texttt{PoolDatum} accordingly.
+    \item For trading, limit orders are locked under the v2 orderbook script. Off-chain matchmakers see if these orders can match each other or if a pool can fill them at the requested price. 
+    \item The matchmaker then constructs a transaction consuming one or more order UTxOs and, optionally, the pool UTxO. Any partially filled orders are re-created on-chain with updated amounts.
+\end{itemize}
+
+\paragraph{Special Notes}
+\begin{itemize}
+    \item The \texttt{odScriptVersion} field can signal backwards compatibility or expansions for new pool types (e.g., concentrated liquidity).
+    \item Combining order-based trades with AMM liquidity allows users to either trade via standard limit orders or rely on the pool to fill an order at current prices.
+    \item This integrated approach aims to provide deeper liquidity than purely AMM or purely orderbook-based solutions, while keeping partial matches feasible in a single transaction.
+\end{itemize}
+
+
+
+\subsection{Minswap v1}
+\label{sec:minswap_v1}
+
+\subsubsection{Protocol Overview}
+Minswap v1 is an automated market-maker (AMM) DEX on Cardano using the standard constant-product model \( x \cdot y = \mathrm{const}\). LP tokens represent liquidity providers’ shares in each pool, and fees accrue back into the pools. The protocol uses a batcher mechanism to process user swap requests and maintain concurrency.
+
+\subsubsection{Transaction and Datum Structures}
+A typical swap UTxO includes a short datum that defines:
+\begin{itemize}
+    \item \emph{Sender and Beneficiary} addresses (public key hash plus optional stake key).
+    \item \emph{Assets to Swap}: Token policy/name and amounts.
+    \item \emph{Batcher Fee} and a \emph{Deposit} in ADA.
+\end{itemize}
+When a user places a swap, this UTxO is locked under the Minswap contract. The batcher can then match it against the pool reserves, calculating out amounts based on the constant-product formula, and finalize the swap in one transaction.
+
+\subsubsection{Batcher and Off-Chain Flow}
+The off-chain batcher collects user swap requests, checks the pool states, and executes the desired trades. This design ensures concurrency by separating the order creation (placing the swap) from the actual execution (batching multiple user swaps).
+
+\paragraph{Differences and Limitations}
+\begin{itemize}
+    \item v1 only supports the basic constant-product formula. Other formulas or multi-asset strategies discussed in the whitepaper are out of scope for this version.
+    \item There is no specialized on-chain price oracle or multi-pool routing at the contract level.
+\end{itemize}
+
+
+
+\subsection{Minswap Stableswap}
+\label{sec:minswap_stable}
+
+\subsubsection{Protocol Overview}
+Minswap’s stableswap module introduces specialized pools for stable assets with minimal slippage around a 1:1 peg. The contract logic adjusts the constant-product formula to concentrate liquidity near parity. This primarily benefits traders swapping one stable token for another.
+
+\subsubsection{Transaction and Datum Structures}
+Each stableswap UTxO generally encodes:
+\begin{itemize}
+    \item \emph{Sender} and \emph{Receiver} data.
+    \item \emph{Stable Swap Step}, referencing which stable token is sold and the minimum output amount.
+    \item \emph{Batcher Fee} and \emph{Deposit}.
+\end{itemize}
+Like the main AMM, a specialized pool datum holds the amounts of each stable token in the pool and an amplification factor to minimize slippage around the peg.
+
+\subsubsection{Batcher or Off-Chain Components}
+Similar to Minswap v1, stableswap depends on an off-chain batcher to consume swap UTxOs, compare them to the pool’s reserves, and finalize trades. Liquidity providers can deposit or withdraw stable tokens. 
+
+\paragraph{Remarks}
+\begin{itemize}
+    \item Pools typically charge lower fees due to the reduced impermanent loss risk around stable pairs.
+    \item Each stable pair (e.g., DJED/iUSD) has its own validator address and pool ID token.
+\end{itemize}
+
+
+
+\subsection{Minswap v2}
+\label{sec:minswap_v2}
+
+\subsubsection{Protocol Overview}
+Minswap v2 expands on the original AMM approach by adding advanced transaction batching, higher throughput, and user-defined order types (e.g., limit, stop-loss). It also includes a more flexible fee mechanism. This version is compiled under Plutus v2, which can reduce script size and allow for more complex transactions.
+
+\paragraph{Key Differences from v1}
+\begin{itemize}
+    \item Additional order constructors (e.g., \texttt{SwapExactIn}, \texttt{StopLoss}, \texttt{OCO}, partial fill logic).
+    \item Higher concurrency, sometimes reaching dozens of swaps in a single batch transaction.
+    \item More granular control over fees (0.05\% up to 20\%), with potential governance-based adjustments.
+\end{itemize}
+
+\subsubsection{Transaction and Datum Structures}
+A Minswap v2 order datum:
+\begin{itemize}
+    \item \emph{Sender/Beneficiary} addresses.
+    \item An integer \emph{constructor} indicating the order type.
+    \item \emph{Asset Specs} for tokens being sold and purchased.
+    \item \emph{Batcher Fee} and a possible \emph{deposit} to handle expiration or fill-or-kill.
+\end{itemize}
+With Plutus v2 optimizations, up to 36 orders can be aggregated in a single transaction, each referencing its own constructor logic.
+
+\subsubsection{Batcher or Off-Chain Flow}
+A batcher collects pending UTxOs, identifies which can match instantly, and executes them in one transaction. Unfilled or partially filled orders are re-locked with updated amounts.
+
+\paragraph{Remarks}
+\begin{itemize}
+    \item The new flexible order system attempts to replicate more advanced user-defined trading conditions within the constraints of eUTxO.
+    \item The codebase aims to reduce storage overhead by using reference inputs, cutting down repeated scripts in each transaction.
+\end{itemize}
+
+
+
+\subsection{SundaeSwap v1}
+\label{sec:sundae_v1}
+
+\subsubsection{Protocol Overview}
+SundaeSwap v1 is a constant-product AMM DEX on Cardano, introduced in early 2022. Similar to Uniswap’s \( x \cdot y = k \) formula, each pool has two tokens, and the user can swap one token for the other while incurring a fractional fee. The code was adapted to Cardano’s eUTxO model with concurrency challenges mitigated by an off-chain batcher (often called a ``scooper'').
+
+\subsubsection{Transaction and Datum Structures}
+A typical SundaeSwap v1 swap UTxO uses a four-field datum:
+\begin{enumerate}
+    \item \emph{Pool Identifier} (which pair is being traded).
+    \item \emph{Trader Data}, including a public key hash.
+    \item \emph{Scooper Fee}, a small lovelace payment to the batcher.
+    \item \emph{Token Amounts and Swap Direction}, specifying which token is sold vs. bought and in what amounts.
+\end{enumerate}
+
+Liquidity pools also lock a \emph{pool datum} with references to the pair of tokens, the current supply of LP tokens, and a fee. Additional tokens (e.g., a ``factory token'') ensure the pool is identified as part of SundaeSwap. 
+
+\subsubsection{Batcher or Off-Chain Flow}
+A ``scooper'' repeatedly scans the chain for open swap requests and matches them against the pool. It then updates the pool’s token balances in a single transaction and distributes outputs to the traders.
+
+\paragraph{Remarks}
+\begin{itemize}
+    \item Each liquidity pool is controlled by a single UTxO, potentially creating concurrency bottlenecks if many swaps occur simultaneously.
+    \item Future updates might allow migrating this liquidity to new contracts via an ``allow list'' mechanism.
+\end{itemize}
+
+
+
+\subsection{SundaeSwap v3}
+\label{sec:sundae_v3}
+
+\subsubsection{Protocol Overview}
+SundaeSwap v3 rewrote the contracts in Aiken for lower fees and better concurrency. The DEX can process more orders per ``scoop,'' and the fee mechanism has been updated. A user-friendly migration tool enables liquidity providers to move from older contract versions.
+
+\paragraph{Differences from v1}
+\begin{itemize}
+    \item Higher throughput (the code aims for up to 35 orders in a single scoop).
+    \item A dynamic fee approach dividing fees into a base portion plus an incremental portion per order.
+    \item Simplified migration for older liquidity, letting LPs shift positions with minimal overhead.
+\end{itemize}
+
+\subsubsection{Transaction and Datum Structures}
+Swap orders are more detailed, containing, for example, a \texttt{max\_protocol\_fee}, a \texttt{destination} indicating whether tokens should return to the user or go elsewhere, and a \texttt{details} object specifying input and output tokens. Pools themselves track additional data such as \texttt{bid\_fees\_per\_10\_thousand}, \texttt{ask\_fees\_per\_10\_thousand}, and more flexible fee logic.
+
+\subsubsection{Batcher or Off-Chain Flow}
+A ``scooper'' still processes the UTxOs, but now can batch significantly more orders in a single transaction. The \texttt{max\_protocol\_fee} field ensures that if fees are too high, the user’s order is not executed.
+
+\paragraph{Remarks}
+\begin{itemize}
+    \item The Aiken-based approach focuses on script size efficiency.
+    \item Up to six scoops per block times 35 orders each suggests a large theoretical daily maximum throughput, though real-world performance depends on network conditions.
+\end{itemize}
+
+
+
+\subsection{WingRiders v1}
+\label{sec:wingriders_v1}
+
+\subsubsection{Protocol Overview}
+WingRiders v1 is an AMM-based DEX on Cardano using a standard \( x \times y = \text{const} \) formula. The protocol handles concurrency with user ``request'' UTxOs or batch transactions. It also considers ADA staking in its design, though the exact on-chain structure for that is partially outlined.
+
+\subsubsection{Transaction and Datum Structures}
+\begin{itemize}
+    \item \emph{Swap Datums}: Typically contain trader properties (public key hash, optional beneficiary) and fields for determining the swap direction and amounts.
+    \item \emph{Pool Datums}: Track the pair of tokens, total liquidity, and a \textit{fee} rate. They can also store extra amounts designated as ``treasury'' or ``reserve.''
+\end{itemize}
+
+\subsubsection{Batcher or Off-Chain Flow}
+WingRiders v1 uses an off-chain agent that can combine multiple user orders in one transaction. Each order references which tokens are sold or expected. The batcher updates the pool’s state after the swap, ensuring concurrency is not limited to one user per block.
+
+\paragraph{Remarks}
+\begin{itemize}
+    \item Some datums include a \texttt{deadline} to limit how long an order remains valid.
+    \item ADA staking from the liquidity pool portion has been proposed, though further on-chain code details may be introduced in new versions.
+\end{itemize}
+
+
+
+\subsection{WingRiders v2}
+\label{sec:wingriders_v2}
+
+\subsubsection{Protocol Overview}
+WingRiders v2 refines the AMM approach by supporting more advanced features around fee structures, concurrency, and staking/farming. The contract tracks additional treasury parameters, allowing more flexible distribution of rewards or fee splitting.
+
+\paragraph{Key Differences from v1}
+\begin{itemize}
+    \item More granular ``treasury'' tracking (e.g., \texttt{treasury\_a}, \texttt{project\_treasury\_a}, \texttt{reserve\_treasury\_a}).
+    \item Extended concurrency handling, letting a batcher handle a higher volume of user requests in a single block.
+    \item Staking or yield-farming logic is further developed, enabling more epoch-based reward schemes.
+\end{itemize}
+
+\subsubsection{Transaction and Datum Structures}
+\begin{itemize}
+    \item \emph{Swap Orders}: Contain user address info, tokens being swapped, a \texttt{buy\_amount}, and an \texttt{oil} field (the batcher fee).
+    \item \emph{Pool Datums}: Use fields like \texttt{swap\_fee\_in\_basis} and \texttt{fee\_basis}, plus references to tokens and treasury fields, to compute the actual swap outcome.
+\end{itemize}
+
+\subsubsection{Batcher or Off-Chain Flow}
+As in v1, the batcher consumes user swap orders in bulk. The new ``oil'' fee helps reimburse aggregator transactions. Once processing is complete, the updated pool UTxO is created, reflecting new reserves.
+
+\paragraph{Remarks}
+\begin{itemize}
+    \item Governance improvements may allow DAO-like oversight on how treasury fields are used or distributed.
+    \item The batcher logic is similar to v1, but with additional concurrency optimizations to handle more complex transaction loads.
+\end{itemize}
+
+
+
+\subsection{VyFi}
+\label{sec:vyfi}
+
+\subsubsection{Protocol Overview}
+VyFi is a Cardano-based DEX that uses a core AMM approach for swapping tokens. Additional features such as yield farming or staking are available but are only loosely related to the DEX’s on-chain swap logic. Users can supply liquidity to create or enhance pools, then place swaps referencing these pools.
+
+\subsubsection{Transaction and Datum Structures}
+\begin{itemize}
+    \item A ``swap order'' is locked under the VyFi order validator address. The user’s public key hash and staking key hash are combined in a single \emph{trader bytes} field, along with a \texttt{constructor} determining the swap direction.
+    \item The protocol references an external configuration service to know which pair of tokens the user is swapping (e.g., \texttt{token\_a}, \texttt{token\_b}), plus a batcher fee.
+    \item Each liquidity pool UTxO stores the two tokens, relevant liquidity information, and a \emph{main NFT} that identifies the pool.
+\end{itemize}
+
+\paragraph{Batcher or Off-Chain Processing}
+An aggregator service monitors user swap requests. It checks the \texttt{constructor} to see if the user sells \texttt{token\_a} for \texttt{token\_b} or the reverse, then merges that with the pool’s reserves in a single transaction. If multiple user requests can be processed, they can be aggregated, subject to network constraints.
+
+\paragraph{Remarks}
+Swapping in VyFi can be extended with additional functionalities like \emph{farm} or \emph{BAR staking}, but that is separate from the core DEX logic. The DEX itself uses a standard approach of referencing a pool UTxO and user order UTxO in the same transaction.
+
+
+\subsection{Spectrum v1}
+\label{sec:spectrum}
+
+\subsubsection{Protocol Overview}
+Spectrum v1 aims at cross-chain interoperability by maintaining a sidechain-like environment on Cardano. The system envisions ``shards'' or committees for each external chain, notarizing events (deposits, withdrawals) and aggregating them into a super ledger (\(L^+\)).
+
+\subsubsection{Transaction and Datum Structures}
+\begin{itemize}
+    \item \emph{Cells and Value Transfers}: Spectrum tracks user balances as \emph{cells}, which can be active or terminal. Active cells can be mutated on-chain, while terminal cells indicate tokens to be exported back to another chain.
+    \item \emph{Swap Datum Example}: \texttt{PlutusSpectrumOrder} includes the base and quote tokens, associated fee parameters, and user addresses for receiving leftover tokens or rewards.
+\end{itemize}
+
+\paragraph{Batcher or Off-Chain Components}
+\begin{itemize}
+    \item Each external chain has a committee that notarizes on-chain events. Reports are broadcast to all committees and eventually consolidated into the Spectrum ledger.
+    \item An agent or relay collects these ``reports,'' enabling cross-chain state changes, such as bridging tokens or finalizing liquidity positions.
+\end{itemize}
+
+\paragraph{Remarks}
+\begin{itemize}
+    \item Spectrum’s cell-based approach allows partial reverts if a source chain transaction is rolled back before being fully finalized.
+    \item The global clock sync mechanism coordinates epoch boundaries across connected chains, limiting potential forks or timing attacks.
+\end{itemize}
+
+
+
+\section{Preliminary Observations}
+\label{sec:observations}
+Although specific details will be filled in as our investigation deepens, we note a few preliminary observations from our early analysis:
+\begin{itemize}
+    \item Varied Datum Formats: Each DEX structures its datums differently. A unified parsing strategy will need modular designs per DEX.
+    \item Batcher Necessities: Many protocols rely on off-chain or aggregator scripts that periodically update on-chain states. Understanding scheduling and logic is vital for accurate analytics.
+    \item Concurrency Solutions: Some DEXs implement concurrency mechanisms (like multiple UTxOs or specialized scripts) to allow simultaneous interactions. The chosen method directly impacts how we track transaction histories.
+\end{itemize}
+
+\section{Next Steps and Conclusion}
+\label{sec:conclusion}
+This report marks the successful completion of \textbf{Milestone 1: Smart Contract Analysis}. We have laid the groundwork for understanding the various smart contract architectures across major DEXs on Cardano. In the next milestones, we will:
+
+\begin{itemize}
+    \item Translate these findings into a common codebase that can parse, interpret, and store DEX transaction data in a well-structured format.
+    \item Develop a fully functional analytics API that provides endpoint access to data such as trades, user histories, price histories, and volume analytics.
+    \item Perform system testing, deployment scripting, and integrate additional analytical features (e.g., arbitrage transaction detection).
+\end{itemize}
+
+By documenting and analyzing these protocols, we aim to build an open-source reference for Cardano developers and users to easily monitor and study DeFi activity. This shared knowledge supports a more transparent and innovative ecosystem.
+
+\end{document}
