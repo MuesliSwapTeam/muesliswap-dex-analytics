@@ -1,0 +1,120 @@
+{
+    "fields": [
+        // OrderType
+        {
+            "bytes": "00"
+        },
+
+        // Beacon used to track progress.
+        {
+            "bytes": "892497c418deb762236651b4e32f07bbee14b40032cbf763386e22c3"
+        },
+
+        // input asset: what we receive
+        {
+            "fields": [
+                {
+                    "bytes": ""
+                },
+                {
+                    "bytes": ""
+                }
+            ],
+            "constructor": 0
+        },
+
+        // Tradable amount of Lovelace.
+        {
+            "int": 438957
+        },
+
+        /// Assumed cost (in Lovelace) of one step of execution.
+        {
+            "int": 1000000
+        },
+
+        /// Minimal marginal output allowed per execution step.
+        {
+            "int": 2436068
+        },
+
+        /// output asset: what we receive. (spend, I suppose)
+        {
+            "fields": [
+                {
+                    "bytes": "8483844875ce4d61c2aa459240f277d32081ee08fe0ad16899a0f581"
+                },
+                {
+                    "bytes": "0014df10544954414e"
+                }
+            ],
+            "constructor": 0
+        },
+
+        /// Worst acceptable price (Output/Input).
+        {
+            "fields": [
+                {
+                    "int": 554967406177032
+                },
+                {
+                    "int": 100000000000000
+                }
+            ],
+            "constructor": 0
+        },
+
+        /// How much fee we pay to executor for whole swap.
+        {
+            "int": 1000000
+        },
+
+        /// Where the output from the order must go.
+        {
+            "fields": [
+                {
+                    "fields": [
+                        {
+                            "bytes": "10bb7d1fb8c7c512b797557795b1cc96c22b3634c962babec72fb0f2"
+                        }
+                    ],
+                    "constructor": 0
+                },
+                {
+                    "fields": [
+                        {
+                            "fields": [
+                                {
+                                    "fields": [
+                                        {
+                                            "bytes": "c0248ad20b2193208473c5036809aa67247201bae74024cec3885c30"
+                                        }
+                                    ],
+                                    "constructor": 0
+                                }
+                            ],
+                            "constructor": 0
+                        }
+                    ],
+                    "constructor": 0
+                }
+            ],
+            "constructor": 0
+        },
+
+        /// PKH authorized to cancel order.
+        {
+            "bytes": "10bb7d1fb8c7c512b797557795b1cc96c22b3634c962babec72fb0f2"
+        },
+
+        /// Executors permitted to execute this order.
+        {
+            "list": [
+                {
+                    "bytes": "5cb2c968e5d1c7197a6ce7615967310a375545d9bc65063a964335b2"
+                }
+            ]
+        }
+    ],
+    "constructor": 0
+}

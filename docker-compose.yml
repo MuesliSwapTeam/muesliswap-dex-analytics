@@ -1,0 +1,77 @@
+version: "3"
+services:
+
+  database:
+    image: postgres:16.1-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-analytics}
+      POSTGRES_USER: ${POSTGRES_USER:-analytics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analytics}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U analytics" ]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  ogmios:
+    # Connects to the Cardano node and provides an API for accessing blocks
+    image: cardanosolutions/ogmios:v5.6.0-mainnet
+    restart: on-failure
+    command: [
+      "--host", "0.0.0.0",
+      "--node-socket", "/ipc/node.socket",
+      "--node-config", "/config/config.json"
+    ]
+    volumes:
+      - /home/blockfrost/services/cardano-node/config:/config
+      - /home/blockfrost/services/cardano-node/ipc/:/ipc
+
+  querier:
+    # Reads new blocks from Ogmios and puts processed data in database (in real-time)
+    depends_on:
+      database:
+        condition: service_healthy
+      ogmios:
+        condition: service_started
+    build:
+      context: .
+    environment:
+      DATABASE_URI: "postgresql+psycopg://${POSTGRES_USER:-analytics}:${POSTGRES_PASSWORD:-analytics}@database:5432/${POSTGRES_DB:-analytics}"
+      OGMIOS_URL: "ws://ogmios:1337"
+    command: python -m querier
+    restart: always
+    volumes:
+      - ./logs:/app/logs
+
+  updater:
+    # Periodically updates cached data such as current price charts
+    depends_on:
+      database:
+        condition: service_started
+    build:
+      context: .
+    environment:
+      DATABASE_URI: "postgresql+psycopg://${POSTGRES_USER:-analytics}:${POSTGRES_PASSWORD:-analytics}@database:5432/${POSTGRES_DB:-analytics}"
+    volumes:
+      - ./data:/app/data  # cached data will be put here
+    command: python -m server.updater
+
+  server:
+    # Serves data from database and data that was cached by "updater"
+    depends_on:
+      database:
+        condition: service_started
+    build:
+      context: .
+    environment:
+      DATABASE_URI: "postgresql+psycopg://${POSTGRES_USER:-analytics}:${POSTGRES_PASSWORD:-analytics}@database:5432/${POSTGRES_DB:-analytics}"
+    ports:
+      - 8201:8201
+    volumes:
+      - ./data:/app/data  # contains cached data from "updater"
+    command: gunicorn -w 2 server.serve:app -b 0.0.0.0:8201
+
+volumes:
+  postgres-data:
