@@ -40,7 +40,7 @@ class BlockInfo:
 def get_place_tokens_and_amounts():
     raise NotImplementedError()
 
-def find_datum_cbor_hex(tx: dict, txo: dict) -> CBorHex | None:
+def find_datum_cbor_hex(tx: dict, txo: dict) -> CBorHex:
     datum_hash = txo.get("datumHash")
     if not datum_hash:
         _LOGGER.warning("Datum hash was not attached")
@@ -78,7 +78,7 @@ def parse_muesliswap_datum(datum: datums.Datum):
         raise InvalidOrderException(ex)
 
 
-def reconstruct_datum_metadata(tx: dict, txo: dict) -> Tuple[Tuple[str, str], Token, Token, int, bool, int] | None:
+def reconstruct_datum_metadata(tx: dict, txo: dict) -> Tuple[Tuple[str, str], Token, Token, int, bool, int]:
     """
     Example metadata (tx['metadata']):
     {
@@ -253,7 +253,7 @@ def get_amount_of(utxo: dict, token: Token) -> int:
     return utxo['value']['assets'].get(token.to_hex(), 0)
 
 
-def get_placed_order(utxo_hash: str, utxo_index: str | int, session: db.Session) -> Optional[db.Order]:
+def get_placed_order(utxo_hash: str, utxo_index: str, session: db.Session) -> Optional[db.Order]:
     utxo_id = f"{utxo_hash}#{utxo_index}"
     # It can be either the original placed order ...
     placed_order = session.query(db.Order).where(db.Order.tx_id == utxo_id).first()

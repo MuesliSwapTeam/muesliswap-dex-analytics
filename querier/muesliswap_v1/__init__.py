@@ -1,7 +1,8 @@
 import logging
 
 from cardano_python_utils import datums
-from cardano_python_utils.classes import Token, Asset, ShelleyAddress
+from cardano_python_utils.classes import Token, Asset
+from cardano_python_utils.util import ShelleyAddress
 
 from querier.datum import OrderValues
 from querier.util import ADA, InvalidOrderException, MuesliSwapV1Datum

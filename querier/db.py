@@ -134,7 +134,7 @@ class Order(Base):
             return OrderStatus.PARTIAL_MATCH
         return OrderStatus.OPEN
 
-    def finalized_at(self) -> int | None:
+    def finalized_at(self) -> int:
         if self.cancellation is not None:
             return util.slot_datestring(self.cancellation.slot_no)
         if self.full_match is not None:

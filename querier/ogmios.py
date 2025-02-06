@@ -20,10 +20,12 @@ NEXT_BLOCK = json.dumps(NEXT_BLOCK)
 
 class OgmiosIterator:
 
-    def __init__(self, dex_addrs: dict):
+    def __init__(self, dex_addrs: dict = None):
         self.dex_addrs = dex_addrs
 
     def init_connection(self, start_slot, start_hash):
+        self.start_slot = start_slot
+        self.start_hash = start_hash
         self.ws = websocket.WebSocket()
         self.ws.connect(OGMIOS_URL)
 
@@ -51,8 +53,11 @@ class OgmiosIterator:
         self.ws.send(NEXT_BLOCK)
         self.ws.recv()  # this just says roll back to the intersection (we already did)
 
-    def iterate_blocks(self, start_slot, start_hash):
-        self.init_connection(start_slot, start_hash)
+    def iterate_blocks(self, start_slot=None, start_hash=None):
+        if start_slot is None or start_hash is None:
+            self.init_connection(self.start_slot, self.start_hash)
+        else:
+            self.init_connection(start_slot, start_hash)
         # we want to always keep 100 blocks in queue to avoid waiting for node
         for i in range(100):
             self.ws.send(NEXT_BLOCK)

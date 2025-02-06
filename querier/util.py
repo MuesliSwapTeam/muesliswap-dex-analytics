@@ -44,7 +44,7 @@ class MuesliSwapV1Datum(PlutusData):
     CONSTR_ID = 0
     order_params: MuesliSwapV1OrderParams
 
-def reconstruct_datum_metadata(tx: dict) -> CBorHex | None:
+def reconstruct_datum_metadata(tx: dict) -> CBorHex:
     """
     Example metadata (tx['metadata']):
     {
