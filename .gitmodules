@@ -1,4 +1,0 @@
-[submodule "muesliswap-cardano-python-utils"]
-	path = muesliswap-cardano-python-utils
-	url = git@github.com:MuesliSwapLabs/muesliswap-cardano-python-utils.git
-	branch = a5dfee0cf605c57e445b5cb3d0bb54f3cafe4d8b
