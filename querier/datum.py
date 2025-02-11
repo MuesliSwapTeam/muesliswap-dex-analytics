@@ -15,6 +15,13 @@ class OrderValues:
     lvl_deposit: int
 
 
+class OrderStatus:
+    OPEN = "open"
+    CANCELLED = "canceled"
+    FULFILLED = "matched"
+    UNKNOWN = "unknown"
+
+
 def parse_int(datum: Datum, desc: str = "") -> int:
     assert datum.keys() == set(["int"]), f"expected int as {desc}"
     val = datum["int"]
@@ -38,5 +45,7 @@ def parse_str(datum: Datum, desc: str = "") -> str:
 
 def parse_frac(datum: Datum, desc: str = "") -> Fraction:
     num, denom = datum["fields"][0]["int"], datum["fields"][1]["int"]
-    assert isinstance(num, int) and isinstance(denom, int), f"expected (int, int) as {desc}, got {num!r} and {denom!r}"
+    assert isinstance(num, int) and isinstance(
+        denom, int
+    ), f"expected (int, int) as {desc}, got {num!r} and {denom!r}"
     return Fraction(num, denom)

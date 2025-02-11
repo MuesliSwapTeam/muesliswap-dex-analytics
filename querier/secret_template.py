@@ -1,0 +1,2 @@
+OGMIOS_SERVER_USERNAME = "my_username"
+OGMIOS_SERVER_PASSWORD = "my_password"

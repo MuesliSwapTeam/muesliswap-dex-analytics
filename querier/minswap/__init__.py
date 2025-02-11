@@ -3,6 +3,8 @@ import logging
 from cardano_python_utils.classes import Datum, Token, Asset, TxO  # type: ignore
 
 from ..datum import parse_int, parse_bytes, OrderValues
+from ..util import parse_assets
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,8 +59,8 @@ def determine_bid_asset_from_txo(txo: dict, subtract_lvl: int) -> Asset:
     # A) bid token is ADA: take txo.amount, subtract lvl_attached and batcher_fee
     #    - in some DEXs we don't have lvl_attached, but directly specified buy_amount
     # B) bid token is something else: here, fees are lvl_attached maybe plus batcher fee => don't check rn
-    attached_assets = txo["value"].get("assets", {})
-    attached_lvl = txo["value"]["coins"]
+    attached_assets = parse_assets(txo)
+    attached_lvl = txo["value"]["ada"]["lovelace"]
 
     if len(attached_assets) == 1:  # The easy case, single token placed
         # We are swapping to ADA

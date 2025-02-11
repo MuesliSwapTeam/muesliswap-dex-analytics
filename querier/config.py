@@ -22,4 +22,4 @@ DEFAULT_START_SLOT = 46536192
 DEFAULT_START_HASH = "f90517fd9fb9194b1ef6f9c1d147c0f175c3b29604542692e3d06bf13403aacf"
 
 
-OGMIOS_URL = os.environ.get("OGMIOS_URL", "ws://localhost:1337")
+OGMIOS_URL = os.environ.get("OGMIOS_URL", "wss://ogmios.muesliswap.com")

@@ -3,8 +3,10 @@ import time
 import logging
 
 import websocket
+import base64
 
 from .config import OGMIOS_URL
+from .secret import OGMIOS_SERVER_USERNAME, OGMIOS_SERVER_PASSWORD
 from .rollback import RollbackHandler
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,8 +28,17 @@ class OgmiosIterator:
     def init_connection(self, start_slot, start_hash):
         self.start_slot = start_slot
         self.start_hash = start_hash
+
         self.ws = websocket.WebSocket()
-        self.ws.connect(OGMIOS_URL)
+        headers = {}
+        if OGMIOS_SERVER_USERNAME is not None and OGMIOS_SERVER_PASSWORD is not None:
+            credentials = f"{OGMIOS_SERVER_USERNAME}:{OGMIOS_SERVER_PASSWORD}"
+            encoded_credentials = base64.b64encode(credentials.encode("utf-8")).decode("utf-8")
+            headers["Authorization"] = f"Basic {encoded_credentials}"
+        try:
+            self.ws.connect(OGMIOS_URL, header=headers)
+        except websocket.WebSocketBadStatusException as e:
+            raise Exception(f"Can't connect to Ogmios server on {OGMIOS_URL}") from e
 
         data = TEMPLATE.copy()
         data["method"] = "findIntersection"

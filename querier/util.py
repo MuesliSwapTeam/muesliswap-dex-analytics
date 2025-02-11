@@ -75,3 +75,12 @@ def reconstruct_datum_metadata(tx: dict) -> CBorHex:
         return None
 
 ADA = Token("", "")
+
+
+def parse_assets(txo: dict):
+    assets_without_ada = {k: v for k, v in txo["value"].items() if k != "ada"}
+    return {
+        f"{outer_key}.{inner_key}": value
+        for outer_key, inner_dict in assets_without_ada.items()
+        for inner_key, value in inner_dict.items()
+    }

@@ -11,6 +11,7 @@ from cardano_python_utils.classes import (  # type: ignore
 
 from ..config import VYFI_POOLS_ENDPOINT, VYFI_LVL_ATTACHED
 from ..datum import parse_int, parse_bytes, OrderValues
+from ..util import parse_assets
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ def get_vyfi_pools_list():
 
 
 def determine_sell_amount(txo: dict, sell_token: Token, batcher_fee: int):
-    attached_assets = txo["value"].get("assets", {})
+    attached_assets = parse_assets(txo)
     attached_lvl = txo["value"]["coins"]
 
     if sell_token.policy_id == "" and sell_token.name == "":
