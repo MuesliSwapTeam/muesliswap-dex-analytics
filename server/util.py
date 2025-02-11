@@ -575,44 +575,60 @@ def get_token_price_and_volume_chart(
     return result
 
 
-def get_trades(token_from: str, token_to: str, limit: int, offset: int, dex_id: str = None, aggregator_id: str = None):
-    """Returns a list of last completed trades between a<->b, regardless of swap direction"""
+def get_trades(token_from: str, token_to: str, limit: int, offset: int, dex_id: str = None, aggregator_id: str = None, min_ask_amount: int = None, min_bid_amount: int = None):
+    """Returns a list of last completed trades between a<->b, regardless of swap direction,
+    with optional filtering for high-value trades based on ask and bid amounts."""
     substring_expr = "POSITION('#' in \"PartialMatch\".new_utxo_id)" if IS_POSTGRES else "INSTR(\"PartialMatch\".new_utxo_id, '#')"
     params = {"token_a": token_from, "token_b": token_to, "limit": limit, "offset": offset}
     dex_condition = filter_by_dex(params, dex_id, aggregator_id, table_name='m')
+    
+    # Build extra conditions for high-value filtering if provided.
+    extra_conditions = ""
+    if min_ask_amount is not None:
+        extra_conditions += " AND m.matched_amount >= :min_ask_amount"
+        params["min_ask_amount"] = min_ask_amount
+    if min_bid_amount is not None:
+        extra_conditions += " AND m.paid_amount >= :min_bid_amount"
+        params["min_bid_amount"] = min_bid_amount
 
     query = f"""
-    with matches as (SELECT
-        "Order".id || '-' || "FullMatch".id as id,
-        "FullMatch".tx_hash as txid,
-        "FullMatch".matched_amount as matched_amount,
-        "FullMatch".paid_amount as paid_amount,
-        "FullMatch".slot_no as slot_no,
-        "Order".ask_token as ask_token,
-        "Order".bid_token as bid_token,
-        "Order".aggregator_platform as aggregator_platform,
-        "Order".dex_id as dex_id
-        from "Order" inner join "FullMatch" on "Order".full_match_id = "FullMatch".id
-        UNION SELECT 
-        "Order".id || '-' || "PartialMatch".id as id,
-        SUBSTR("PartialMatch".new_utxo_id, 0, {substring_expr}) as txid,
-        "PartialMatch".matched_amount as matched_amount,
-        "PartialMatch".paid_amount as paid_amount,
-        "PartialMatch".slot_no as slot_no,
-        "Order".ask_token as ask_token,
-        "Order".bid_token as bid_token,
-        "Order".aggregator_platform as aggregator_platform,
-        "Order".dex_id as dex_id
-        from "PartialMatch" join "Order" on "PartialMatch".order_id = "Order".id
+    WITH matches AS (
+        SELECT
+            "Order".id || '-' || "FullMatch".id AS id,
+            "FullMatch".tx_hash AS txid,
+            "FullMatch".matched_amount AS matched_amount,
+            "FullMatch".paid_amount AS paid_amount,
+            "FullMatch".slot_no AS slot_no,
+            "Order".ask_token AS ask_token,
+            "Order".bid_token AS bid_token,
+            "Order".aggregator_platform AS aggregator_platform,
+            "Order".dex_id AS dex_id
+        FROM "Order" 
+        INNER JOIN "FullMatch" ON "Order".full_match_id = "FullMatch".id
+        UNION 
+        SELECT 
+            "Order".id || '-' || "PartialMatch".id AS id,
+            SUBSTR("PartialMatch".new_utxo_id, 0, {substring_expr}) AS txid,
+            "PartialMatch".matched_amount AS matched_amount,
+            "PartialMatch".paid_amount AS paid_amount,
+            "PartialMatch".slot_no AS slot_no,
+            "Order".ask_token AS ask_token,
+            "Order".bid_token AS bid_token,
+            "Order".aggregator_platform AS aggregator_platform,
+            "Order".dex_id AS dex_id
+        FROM "PartialMatch" 
+        JOIN "Order" ON "PartialMatch".order_id = "Order".id
     )
     
-    select * from matches m
-    where (
-    (m.ask_token = :token_a and m.bid_token = :token_b) or
-    (m.ask_token = :token_b and m.bid_token = :token_a)
-    ) {dex_condition}
-    order by slot_no desc 
-    limit :limit offset :offset
+    SELECT * FROM matches m
+    WHERE (
+        (m.ask_token = :token_a AND m.bid_token = :token_b) OR
+        (m.ask_token = :token_b AND m.bid_token = :token_a)
+    )
+    {dex_condition}
+    {extra_conditions}
+    ORDER BY slot_no DESC 
+    LIMIT :limit OFFSET :offset
     """
     result = []
 

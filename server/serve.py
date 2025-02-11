@@ -264,12 +264,14 @@ class Trades(Resource):
             "limit": "Maximum number of results to return (default: 100).",
             "offset": "Offset for pagination (default: 0).",
             "aggregator-id": "Aggregator ID for filtering results (optional).",
+            "min-ask-amount": "Minimum ask amount for high-value trades (optional).",
+            "min-bid-amount": "Minimum bid amount for high-value trades (optional).",
         },
         responses={200: ("Success", trade_response_model)},
     )
     def get(self):
         """
-        Get recent trades between two tokens.
+        Get recent trades between two tokens, with optional filtering for high-value trades.
 
         Returns:
             JSON: List of recent trades.
@@ -278,6 +280,14 @@ class Trades(Resource):
         token_to = request.args.get("to-token", type=str)
         limit = request.args.get("limit", type=int, default=100)
         offset = request.args.get("offset", type=int, default=0)
+        min_ask_amount = request.args.get("min-ask-amount", type=int, default=None)
+        min_bid_amount = request.args.get("min-bid-amount", type=int, default=None)
         if token_from is None or token_to is None or token_from == token_to:
             abort(400, "Invalid tokens provided.")
-        return jsonify(util.get_trades(token_from, token_to, limit, offset))
+        aggregator_id = request.args.get("aggregator-id", type=str, default=None)
+        return jsonify(util.get_trades(
+            token_from, token_to, limit, offset,
+            aggregator_id=aggregator_id,
+            min_ask_amount=min_ask_amount,
+            min_bid_amount=min_bid_amount,
+        ))
