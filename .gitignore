@@ -13,7 +13,7 @@ nohup*
 __pycache__/
 logs/
 data/
-*.sqlite
+/*.sqlite
 *.sqlite-journal
 venv/
 .vscode/
